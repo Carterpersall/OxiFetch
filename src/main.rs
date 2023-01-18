@@ -1,85 +1,99 @@
-//use ferris_says::say;
-//use std::io::{stdout, BufWriter};
+use std::path::Path;
 use sysinfo::*;
+use serde::*;
+
+use machine_info::*;
+
+// Config Struct //
+
+#[derive(Default, Debug, Serialize, Deserialize)]
+struct Config {
+    user: bool,
+    partition: bool,
+    os: bool,
+    computer_name: bool,
+    kernel_version: bool,
+    uptime: bool,
+    resolution: bool,
+    packages: bool,
+    theme: bool,
+    cpu_name: bool,
+    gpu_info: bool,
+    processes: bool,
+    ram: bool,
+    swap: bool,
+    disk_info: bool,
+    battery: bool,
+    locale: bool,
+    info_offset: usize
+}
 
 
 fn main() {
     // Configuration //
 
-    let user           = true;
-    let partition      = true;
-    let os             = true;
-    let computer_name  = true;
-    let kernel_version = true;
-    let uptime         = true;
-    let resolution     = true;
-    let packages       = true;
-    let theme          = true;
-    let cpu_name       = true;
-    let processes      = true;
-    let ram            = true;
-    let swap           = true;
-    let disk_info      = true;
-    let battery        = true;
-    let locale         = true;
-    let mut stdout = stdout();
+    let config: Config = confy::load_path(Path::new("./config.toml")).map_err(|e| eprintln!("Error: {}", e)).ok().unwrap();
+    //let config: Config = confy::load("OxyFetch", None).unwrap();
+
     let image = vec![
-        "                                .., ",
-        "                    ....,,:;+ccllll ",
-        "      ...,,+:;  cllllllllllllllllll ",
-        ",cclllllllllll  lllllllllllllllllll ",
-        "llllllllllllll  lllllllllllllllllll ",
-        "llllllllllllll  lllllllllllllllllll ",
-        "llllllllllllll  lllllllllllllllllll ",
-        "llllllllllllll  lllllllllllllllllll ",
-        "llllllllllllll  lllllllllllllllllll ",
-        "                                    ",
-        "llllllllllllll  lllllllllllllllllll ",
-        "llllllllllllll  lllllllllllllllllll ",
-        "llllllllllllll  lllllllllllllllllll ",
-        "llllllllllllll  lllllllllllllllllll ",
-        "llllllllllllll  lllllllllllllllllll ",
-        "`'ccllllllllll  lllllllllllllllllll ",
-        "       `' \\*::  :ccllllllllllllllll",
-        "                       ````''*::cll ",
-        "                                 `` "
+        "                                ..,  ",
+        "                    ....,,:;+ccllll  ",
+        "      ...,,+:;  cllllllllllllllllll  ",
+        ",cclllllllllll  lllllllllllllllllll  ",
+        "llllllllllllll  lllllllllllllllllll  ",
+        "llllllllllllll  lllllllllllllllllll  ",
+        "llllllllllllll  lllllllllllllllllll  ",
+        "llllllllllllll  lllllllllllllllllll  ",
+        "llllllllllllll  lllllllllllllllllll  ",
+        "                                     ",
+        "llllllllllllll  lllllllllllllllllll  ",
+        "llllllllllllll  lllllllllllllllllll  ",
+        "llllllllllllll  lllllllllllllllllll  ",
+        "llllllllllllll  lllllllllllllllllll  ",
+        "llllllllllllll  lllllllllllllllllll  ",
+        "`'ccllllllllll  lllllllllllllllllll  ",
+        "       `' \\*::  :ccllllllllllllllll  ",
+        "                       ````''*::cll  ",
+        "                                 ``  "
     ];
     let cursor_position = (image[0].len() + 1) as u16;
 
+
     // Initialization //
+
+    let mut m = Machine::new();
+
+    // Create stdout variable
+    let mut stdout = stdout();
 
     use crossterm::style::Stylize;
 
-    // Queue and print the image
-    queue!(stdout, style::Print("\n".repeat(image.len())), cursor::MoveUp(image.len() as u16)).map_err(|e| eprintln!("Error: {}", e)).ok();
-    stdout.flush().map_err(|e| eprintln!("Error: {}", e)).ok();
+    // Create space to print the image
+    // Doesn't work in all terminals and may not be needed anymore
+    //queue!(stdout, style::Print("\n".repeat(image.len())), cursor::MoveUp(image.len() as u16)).map_err(|e| eprintln!("Error: {}", e)).ok();
+    //stdout.flush().map_err(|e| eprintln!("Error: {}", e)).ok();
 
-    let initial_position_y = cursor::position().unwrap().1 + 1;
+    // Create variables containing image information
     let final_position_y = cursor::position().unwrap().1 + (image.len() + 1) as u16;
 
-    for line in &image {
-        queue!(stdout, style::PrintStyledContent(line.cyan()), style::Print("\n")).map_err(|e| eprintln!("Error: {}", e)).ok();
-    }
-    stdout.flush().map_err(|e| eprintln!("Error: {}", e)).ok();
-
-    // Create System struct containing all available system information
+    // Create System struct containing specified system information
     let mut sys = System::new_with_specifics(
         RefreshKind::new()
-            .with_cpu(sysinfo::CpuRefreshKind::new().with_frequency())
+            .with_cpu(CpuRefreshKind::new().with_frequency())
             .with_disks()
             .with_disks_list()
             .with_memory()
-            .with_processes(sysinfo::ProcessRefreshKind::everything().with_user())
+            .with_processes(ProcessRefreshKind::everything().with_user())
             .with_users_list()
     );
 
     // Update all needed information in the `System` struct.
     let refreshkind = RefreshKind::new()
-        .with_cpu(sysinfo::CpuRefreshKind::new().with_frequency())
+        .with_cpu(CpuRefreshKind::new().with_frequency())
         .with_disks()
         .with_disks_list()
         .with_memory()
-        .with_processes(sysinfo::ProcessRefreshKind::everything())
+        .with_processes(ProcessRefreshKind::everything())
         .with_users_list()
     ;
     sys.refresh_specifics(refreshkind);
@@ -233,8 +247,9 @@ fn main() {
     fn get_theme() -> String {
         // Get current theme
         match dark_light::detect() {
-            dark_light::Mode::Dark  => { return "Theme: Dark".to_string()  },
-            dark_light::Mode::Light => { return "Theme: Light".to_string() },
+            dark_light::Mode::Dark    => { "Theme: Dark".to_string()  },
+            dark_light::Mode::Light   => { "Theme: Light".to_string() },
+            dark_light::Mode::Default => { "Unknown".to_string() },
         }
     }
 
@@ -244,6 +259,15 @@ fn main() {
     fn get_cpu_name(sys: &System) -> String {
         // Return the CPU name
         return format!("CPU: {} x {} @ {:.1}GHz", sys.cpus().len(), sys.cpus()[0].brand().trim_end(), sys.cpus()[0].frequency() as f64/ 1000.0);
+    }
+
+
+    // GPU name //
+
+    fn get_gpu_name(mut m: Machine) -> Vec<GraphicCard> {
+        let gpu = m.system_info().graphics;
+
+        return gpu;
     }
 
 
@@ -311,18 +335,18 @@ fn main() {
         let ac_state = battery.status();
         let health = battery.health();
 
-        match (percentage, ac_state, health) {
+        return match (percentage, ac_state, health) {
             // If all battery information is available
             (Ok(percentage), Ok(ac_state), Ok(health)) => {
-                return format!("Battery: {}% ({})\n  Health: {}%", percentage, ac_state, health);
+                format!("Battery: {}% ({})\n  Health: {}%", percentage, ac_state, health)
             }
             // If battery health is not available
             (Ok(percentage), Ok(ac_state), Err(_)) => {
-                return format!("Battery: {}% ({})", percentage, ac_state);
+                format!("Battery: {}% ({})", percentage, ac_state)
             }
             // If no battery information is available
             (Err(_), _, _) | (_, Err(_), _) => {
-                return "Battery: N/A".to_string();
+                "Battery: N/A".to_string()
             }
         }
     }
@@ -343,42 +367,49 @@ fn main() {
     use std::io::{stdout, Write};
     use crossterm::{queue, style::{self}, cursor};
 
-    if user           { queue!(stdout, cursor::MoveTo(cursor_position, initial_position_y + 0),  style::Print(&get_user(&sys)[0])).map_err(|e| eprintln!("Error: {}", e)).ok();   }
-    if partition      { queue!(stdout, cursor::MoveTo(cursor_position, initial_position_y + 1),  style::Print(&get_user(&sys)[1])).map_err(|e| eprintln!("Error: {}", e)).ok();   }
-    if os             { queue!(stdout, cursor::MoveTo(cursor_position, initial_position_y + 2),  style::Print(get_os(&sys))).map_err(|e| eprintln!("Error: {}", e)).ok();         }
-    if computer_name  { queue!(stdout, cursor::MoveTo(cursor_position, initial_position_y + 3),  style::Print(get_computer_name())).map_err(|e| eprintln!("Error: {}", e)).ok();  }
-    if kernel_version { queue!(stdout, cursor::MoveTo(cursor_position, initial_position_y + 4),  style::Print(get_kernel_version())).map_err(|e| eprintln!("Error: {}", e)).ok(); }
-    if uptime         { queue!(stdout, cursor::MoveTo(cursor_position, initial_position_y + 5),  style::Print(get_uptime(&sys))).map_err(|e| eprintln!("Error: {}", e)).ok();     }
-    if resolution     { queue!(stdout, cursor::MoveTo(cursor_position, initial_position_y + 6),  style::Print(get_resolution())).map_err(|e| eprintln!("Error: {}", e)).ok();     }
-    if packages       { queue!(stdout, cursor::MoveTo(cursor_position, initial_position_y + 7),  style::Print(get_packages())).map_err(|e| eprintln!("Error: {}", e)).ok();       }
-    if theme          { queue!(stdout, cursor::MoveTo(cursor_position, initial_position_y + 8),  style::Print(get_theme())).map_err(|e| eprintln!("Error: {}", e)).ok();          }
-    if cpu_name       { queue!(stdout, cursor::MoveTo(cursor_position, initial_position_y + 9),  style::Print(get_cpu_name(&sys))).map_err(|e| eprintln!("Error: {}", e)).ok();   }
-    if processes      { queue!(stdout, cursor::MoveTo(cursor_position, initial_position_y + 10), style::Print(get_processes(&sys))).map_err(|e| eprintln!("Error: {}", e)).ok();  }
-    if ram            { queue!(stdout, cursor::MoveTo(cursor_position, initial_position_y + 11), style::Print(get_ram(&sys))).map_err(|e| eprintln!("Error: {}", e)).ok();        }
-    if swap           { queue!(stdout, cursor::MoveTo(cursor_position, initial_position_y + 12), style::Print(get_swap())).map_err(|e| eprintln!("Error: {}", e)).ok();           }
-    if disk_info      { queue!(stdout, cursor::MoveTo(cursor_position, initial_position_y + 13), style::Print(get_disk_info(&sys))).map_err(|e| eprintln!("Error: {}", e)).ok();  }
-    if battery        { queue!(stdout, cursor::MoveTo(cursor_position, initial_position_y + 14), style::Print(get_battery())).map_err(|e| eprintln!("Error: {}", e)).ok();        }
-    if locale         { queue!(stdout, cursor::MoveTo(cursor_position, initial_position_y + 15), style::Print(get_locale())).map_err(|e| eprintln!("Error: {}", e)).ok();         }
+    let mut i = 0;
 
+    // If there is an offset to the information, print the lines of the image before the information
+    if config.info_offset != 0 {
+        for j in 0..config.info_offset {
+            queue!(stdout, style::PrintStyledContent(image[j].cyan()), style::Print("\n")).map_err(|e| eprintln!("Error: {}", e)).ok();
+        }
+        i = config.info_offset;
+    }
+
+    let user = get_user(&sys);
+
+    if config.user           { queue!(stdout, style::PrintStyledContent(image[i].cyan()) , style::Print(format!("{}\n", &user[0]))).map_err(|e| eprintln!("Error: {}", e)).ok(); i += 1; }
+    if config.partition      { queue!(stdout, style::PrintStyledContent(image[i].cyan()) , style::Print(format!("{}\n", &user[1]))).map_err(|e| eprintln!("Error: {}", e)).ok(); i += 1; }
+    if config.os             { queue!(stdout, style::PrintStyledContent(image[i].cyan()) , style::Print(get_os(&sys) + "\n")                ).map_err(|e| eprintln!("Error: {}", e)).ok(); i += 1; }
+    if config.computer_name  { queue!(stdout, style::PrintStyledContent(image[i].cyan()) , style::Print(get_computer_name() + "\n")         ).map_err(|e| eprintln!("Error: {}", e)).ok(); i += 1; }
+    if config.kernel_version { queue!(stdout, style::PrintStyledContent(image[i].cyan()) , style::Print(get_kernel_version() + "\n")        ).map_err(|e| eprintln!("Error: {}", e)).ok(); i += 1; }
+    if config.uptime         { queue!(stdout, style::PrintStyledContent(image[i].cyan()) , style::Print(get_uptime(&sys) + "\n")            ).map_err(|e| eprintln!("Error: {}", e)).ok(); i += 1; }
+    if config.resolution     { queue!(stdout, style::PrintStyledContent(image[i].cyan()) , style::Print(get_resolution() + "\n")            ).map_err(|e| eprintln!("Error: {}", e)).ok(); i += 1; }
+    if config.packages       { queue!(stdout, style::PrintStyledContent(image[i].cyan()) , style::Print(get_packages() + "\n")              ).map_err(|e| eprintln!("Error: {}", e)).ok(); i += 1; }
+    if config.theme          { queue!(stdout, style::PrintStyledContent(image[i].cyan()) , style::Print(get_theme() + "\n")                 ).map_err(|e| eprintln!("Error: {}", e)).ok(); i += 1; }
+    if config.cpu_name       { queue!(stdout, style::PrintStyledContent(image[i].cyan()) , style::Print(get_cpu_name(&sys) + "\n")          ).map_err(|e| eprintln!("Error: {}", e)).ok(); i += 1; }
+    if config.gpu_info       {
+        let gpu_info = get_gpu_name(m);
+        for gpu in gpu_info {
+            queue!(stdout, style::PrintStyledContent(image[i].cyan()) , style::Print(format!("GPU: {}\n", gpu.name.to_string()))).map_err(|e| eprintln!("Error: {}", e)).ok();
+            i += 1;
+        }
+    }
+    if config.processes      { queue!(stdout, style::PrintStyledContent(image[i].cyan()), style::Print(get_processes(&sys) + "\n")          ).map_err(|e| eprintln!("Error: {}", e)).ok(); i += 1; }
+    if config.ram            { queue!(stdout, style::PrintStyledContent(image[i].cyan()), style::Print(get_ram(&sys) + "\n")                ).map_err(|e| eprintln!("Error: {}", e)).ok(); i += 1; }
+    if config.swap           { queue!(stdout, style::PrintStyledContent(image[i].cyan()), style::Print(get_swap() + "\n")                   ).map_err(|e| eprintln!("Error: {}", e)).ok(); i += 1; }
+    if config.disk_info      { queue!(stdout, style::PrintStyledContent(image[i].cyan()), style::Print(get_disk_info(&sys) + "\n")          ).map_err(|e| eprintln!("Error: {}", e)).ok(); i += 1; }
+    if config.battery        { queue!(stdout, style::PrintStyledContent(image[i].cyan()), style::Print(get_battery() + "\n")                ).map_err(|e| eprintln!("Error: {}", e)).ok(); i += 1; }
+    if config.locale         { queue!(stdout, style::PrintStyledContent(image[i].cyan()), style::Print(get_locale() + "\n")                 ).map_err(|e| eprintln!("Error: {}", e)).ok(); i += 1; }
+
+    // Queue the rest of the image
+    for j in i..image.len() {
+        queue!(stdout, style::PrintStyledContent(image[j].cyan()), style::Print("\n")).map_err(|e| eprintln!("Error: {}", e)).ok();
+    }
+
+    // Print the output queue
     stdout.flush().map_err(|e| eprintln!("Error: {}", e)).ok();
 
     crossterm::execute!(stdout, cursor::MoveTo(cursor_position, final_position_y)).map_err(|e| eprintln!("Error: {}", e)).ok();
-
-/*
-    // Network interfaces
-    println!("Network Adapters:");
-    for (interface_name, data) in sys.networks() {
-        println!("  {}: {}/{} B", interface_name, data.received(), data.transmitted());
-    }
-*/
-    // Print CPU usage
-    /*
-    sys.refresh_cpu();
-    std::thread::sleep(std::time::Duration::from_secs(5));
-    let mut cpuusage = 0.0;
-    for cpu in sys.cpus() {
-        cpuusage += cpu.cpu_usage();
-    }
-    println!("CPU Usage: {:.2}%", cpuusage / sys.cpus().len() as f32);
-    */
 }

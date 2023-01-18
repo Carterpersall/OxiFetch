@@ -11,3 +11,9 @@ target/
 
 # VSCode
 .vscode/
+
+# JetBrains
+.idea/
+
+# Config file
+config.toml
