@@ -1,3 +1,4 @@
+use std::io::Stdout;
 use std::path::Path;
 use sysinfo::*;
 use serde::*;
@@ -61,7 +62,7 @@ fn main() {
 
     // Initialization //
 
-    let mut m = Machine::new();
+    let m = Machine::new();
 
     // Create stdout variable
     let mut stdout = stdout();
@@ -74,7 +75,13 @@ fn main() {
     //stdout.flush().map_err(|e| eprintln!("Error: {}", e)).ok();
 
     // Create variables containing image information
-    let final_position_y = cursor::position().unwrap().1 + (image.len() + 1) as u16;
+    let final_position_y = match cursor::position() {
+        Ok(pos) => pos.1 + (image.len() + 1) as u16,
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            (image.len() + 1) as u16
+        }
+    };
 
     // Create System struct containing specified system information
     let mut sys = System::new_with_specifics(
@@ -160,7 +167,10 @@ fn main() {
         let general:libmacchina::GeneralReadout = libmacchina::traits::GeneralReadout::new();
 
         // Return the computer name
-        return format!("Host: {}", general.machine().unwrap());
+        return match general.machine() {
+            Ok(machine) => format!("Computer: {}", machine),
+            Err(_) => "Computer: Unknown".to_string()
+        };
     }
 
 
@@ -265,9 +275,8 @@ fn main() {
     // GPU name //
 
     fn get_gpu_name(mut m: Machine) -> Vec<GraphicCard> {
-        let gpu = m.system_info().graphics;
-
-        return gpu;
+        // Get the GPU information vector and return it
+        return m.system_info().graphics;
     }
 
 
@@ -297,19 +306,19 @@ fn main() {
 
     // Disk information //
 
-    fn get_disk_info(sys: &System) -> String {
+    fn get_disk_info(sys: &System) -> Vec<String> {
         // Create vector to store disk information in
-        let mut diskoutput = String::from("");
+        let mut diskoutput: Vec<String> = Vec::new();
 
         // Get all disks
         for disk in sys.disks() {
             // Create string from disk information and push to output string
-            diskoutput.push_str(&format!("Disk ({Disk}): {Used} GB / {Total} GB ({Percent}%)",
+            diskoutput.push(format!("Disk ({Disk}): {Used} GB / {Total} GB ({Percent}%)\n",
                 Disk    = disk.mount_point().to_str().unwrap(),
                 Used    = (disk.total_space() - disk.available_space()) / 1073741824,
                 Total   = disk.total_space() / 1073741824,
                 Percent = (disk.total_space() - disk.available_space()) * 100 / disk.total_space()
-            ).as_str());
+            ));
 
             // If the disk has a name, add it to the output string
             //if !disk.name().is_empty() { diskoutput.push_str(&format!("\n  Name: {}", disk.name().to_str().unwrap())); }
@@ -338,7 +347,7 @@ fn main() {
         return match (percentage, ac_state, health) {
             // If all battery information is available
             (Ok(percentage), Ok(ac_state), Ok(health)) => {
-                format!("Battery: {}% ({})\n  Health: {}%", percentage, ac_state, health)
+                format!("Battery: {}% ({}) ({}% Health)", percentage, ac_state, health)
             }
             // If battery health is not available
             (Ok(percentage), Ok(ac_state), Err(_)) => {
@@ -362,6 +371,22 @@ fn main() {
 
     // Execution //
 
+    // Function to print line of image
+    fn print_image_line(index: usize, image: &Vec<&str>, mut stdout: &Stdout) {
+        // Check if the index is in bounds
+        if index < image.len() {
+            match queue!(stdout, style::PrintStyledContent(image[index].cyan())) {
+                Ok(_) => {},
+                Err(e) => {eprintln!("Error: {}", e);},
+            }
+        } else {
+            match queue!(stdout, style::Print(" ".repeat(image[0].len()))) {
+                Ok(_) => {},
+                Err(e) => {eprintln!("Error: {}", e);},
+            }
+        }
+    }
+
     // Add functions to output queue
 
     use std::io::{stdout, Write};
@@ -379,33 +404,102 @@ fn main() {
 
     let user = get_user(&sys);
 
-    if config.user           { queue!(stdout, style::PrintStyledContent(image[i].cyan()) , style::Print(format!("{}\n", &user[0]))).map_err(|e| eprintln!("Error: {}", e)).ok(); i += 1; }
-    if config.partition      { queue!(stdout, style::PrintStyledContent(image[i].cyan()) , style::Print(format!("{}\n", &user[1]))).map_err(|e| eprintln!("Error: {}", e)).ok(); i += 1; }
-    if config.os             { queue!(stdout, style::PrintStyledContent(image[i].cyan()) , style::Print(get_os(&sys) + "\n")                ).map_err(|e| eprintln!("Error: {}", e)).ok(); i += 1; }
-    if config.computer_name  { queue!(stdout, style::PrintStyledContent(image[i].cyan()) , style::Print(get_computer_name() + "\n")         ).map_err(|e| eprintln!("Error: {}", e)).ok(); i += 1; }
-    if config.kernel_version { queue!(stdout, style::PrintStyledContent(image[i].cyan()) , style::Print(get_kernel_version() + "\n")        ).map_err(|e| eprintln!("Error: {}", e)).ok(); i += 1; }
-    if config.uptime         { queue!(stdout, style::PrintStyledContent(image[i].cyan()) , style::Print(get_uptime(&sys) + "\n")            ).map_err(|e| eprintln!("Error: {}", e)).ok(); i += 1; }
-    if config.resolution     { queue!(stdout, style::PrintStyledContent(image[i].cyan()) , style::Print(get_resolution() + "\n")            ).map_err(|e| eprintln!("Error: {}", e)).ok(); i += 1; }
-    if config.packages       { queue!(stdout, style::PrintStyledContent(image[i].cyan()) , style::Print(get_packages() + "\n")              ).map_err(|e| eprintln!("Error: {}", e)).ok(); i += 1; }
-    if config.theme          { queue!(stdout, style::PrintStyledContent(image[i].cyan()) , style::Print(get_theme() + "\n")                 ).map_err(|e| eprintln!("Error: {}", e)).ok(); i += 1; }
-    if config.cpu_name       { queue!(stdout, style::PrintStyledContent(image[i].cyan()) , style::Print(get_cpu_name(&sys) + "\n")          ).map_err(|e| eprintln!("Error: {}", e)).ok(); i += 1; }
-    if config.gpu_info       {
+    if config.user {
+        print_image_line(i, &image, &stdout);
+        queue!(stdout, style::Print(format!("{}\n", &user[0]))).map_err(|e| eprintln!("Error: {}", e)).ok();
+        i += 1;
+    }
+    if config.partition {
+        print_image_line(i, &image, &stdout);
+        queue!(stdout, style::Print(format!("{}\n", &user[1]))).map_err(|e| eprintln!("Error: {}", e)).ok();
+        i += 1;
+    }
+    if config.os {
+        print_image_line(i, &image, &stdout);
+        queue!(stdout, style::Print(get_os(&sys) + "\n")).map_err(|e| eprintln!("Error: {}", e)).ok();
+        i += 1;
+    }
+    if config.computer_name {
+        print_image_line(i, &image, &stdout);
+        queue!(stdout, style::Print(get_computer_name() + "\n")).map_err(|e| eprintln!("Error: {}", e)).ok();
+        i += 1;
+    }
+    if config.kernel_version {
+        print_image_line(i, &image, &stdout);
+        queue!(stdout, style::Print(get_kernel_version() + "\n")).map_err(|e| eprintln!("Error: {}", e)).ok();
+        i += 1;
+    }
+    if config.uptime {
+        print_image_line(i, &image, &stdout);
+        queue!(stdout, style::Print(get_uptime(&sys) + "\n")).map_err(|e| eprintln!("Error: {}", e)).ok();
+        i += 1;
+    }
+    if config.resolution {
+        print_image_line(i, &image, &stdout);
+        queue!(stdout, style::Print(get_resolution() + "\n")).map_err(|e| eprintln!("Error: {}", e)).ok();
+        i += 1;
+    }
+    if config.packages {
+        print_image_line(i, &image, &stdout);
+        queue!(stdout, style::Print(get_packages() + "\n")).map_err(|e| eprintln!("Error: {}", e)).ok();
+        i += 1;
+    }
+    if config.theme {
+        print_image_line(i, &image, &stdout);
+        queue!(stdout, style::Print(get_theme() + "\n")).map_err(|e| eprintln!("Error: {}", e)).ok();
+        i += 1;
+    }
+    if config.cpu_name {
+        print_image_line(i, &image, &stdout);
+        queue!(stdout, style::Print(get_cpu_name(&sys) + "\n")).map_err(|e| eprintln!("Error: {}", e)).ok();
+        i += 1;
+    }
+    if config.gpu_info {
         let gpu_info = get_gpu_name(m);
         for gpu in gpu_info {
-            queue!(stdout, style::PrintStyledContent(image[i].cyan()) , style::Print(format!("GPU: {}\n", gpu.name.to_string()))).map_err(|e| eprintln!("Error: {}", e)).ok();
+            print_image_line(i, &image, &stdout);
+            queue!(stdout, style::Print(format!("GPU: {}\n", gpu.name.to_string()))).map_err(|e| eprintln!("Error: {}", e)).ok();
             i += 1;
         }
     }
-    if config.processes      { queue!(stdout, style::PrintStyledContent(image[i].cyan()), style::Print(get_processes(&sys) + "\n")          ).map_err(|e| eprintln!("Error: {}", e)).ok(); i += 1; }
-    if config.ram            { queue!(stdout, style::PrintStyledContent(image[i].cyan()), style::Print(get_ram(&sys) + "\n")                ).map_err(|e| eprintln!("Error: {}", e)).ok(); i += 1; }
-    if config.swap           { queue!(stdout, style::PrintStyledContent(image[i].cyan()), style::Print(get_swap() + "\n")                   ).map_err(|e| eprintln!("Error: {}", e)).ok(); i += 1; }
-    if config.disk_info      { queue!(stdout, style::PrintStyledContent(image[i].cyan()), style::Print(get_disk_info(&sys) + "\n")          ).map_err(|e| eprintln!("Error: {}", e)).ok(); i += 1; }
-    if config.battery        { queue!(stdout, style::PrintStyledContent(image[i].cyan()), style::Print(get_battery() + "\n")                ).map_err(|e| eprintln!("Error: {}", e)).ok(); i += 1; }
-    if config.locale         { queue!(stdout, style::PrintStyledContent(image[i].cyan()), style::Print(get_locale() + "\n")                 ).map_err(|e| eprintln!("Error: {}", e)).ok(); i += 1; }
+    if config.processes {
+        print_image_line(i, &image, &stdout);
+        queue!(stdout, style::Print(get_processes(&sys) + "\n")).map_err(|e| eprintln!("Error: {}", e)).ok();
+        i += 1;
+    }
+    if config.ram {
+        print_image_line(i, &image, &stdout);
+        queue!(stdout, style::Print(get_ram(&sys) + "\n")).map_err(|e| eprintln!("Error: {}", e)).ok();
+        i += 1;
+    }
+    if config.swap {
+        print_image_line(i, &image, &stdout);
+        queue!(stdout, style::Print(get_swap() + "\n")).map_err(|e| eprintln!("Error: {}", e)).ok();
+        i += 1;
+    }
+    if config.disk_info {
+        for disk in get_disk_info(&sys) {
+            print_image_line(i, &image, &stdout);
+            queue!(stdout, style::Print(disk)).map_err(|e| eprintln!("Error: {}", e)).ok();
+            i += 1;
+        }
+    }
+    if config.battery {
+        print_image_line(i, &image, &stdout);
+        queue!(stdout, style::Print(get_battery() + "\n")).map_err(|e| eprintln!("Error: {}", e)).ok();
+        i += 1;
+    }
+    if config.locale {
+        print_image_line(i, &image, &stdout);
+        queue!(stdout, style::Print(get_locale() + "\n")).map_err(|e| eprintln!("Error: {}", e)).ok();
+        i += 1;
+    }
 
     // Queue the rest of the image
-    for j in i..image.len() {
-        queue!(stdout, style::PrintStyledContent(image[j].cyan()), style::Print("\n")).map_err(|e| eprintln!("Error: {}", e)).ok();
+    if i < image.len() {
+        for j in i..image.len() {
+            queue!(stdout, style::PrintStyledContent(image[j].cyan()), style::Print("\n")).map_err(|e| eprintln!("Error: {}", e)).ok();
+        }
     }
 
     // Print the output queue

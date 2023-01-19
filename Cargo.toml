@@ -17,3 +17,7 @@ sys-locale = "0.2.3"
 confy = "0.5.1"
 serde = "1.0.152"
 machine-info = "1.0.9"
+
+# For flamegraph
+#[profile.release]
+#debug = true

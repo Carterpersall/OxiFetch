@@ -12,6 +12,9 @@ target/
 # VSCode
 .vscode/
 
+# VS
+.vs/
+
 # JetBrains
 .idea/
 
