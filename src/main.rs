@@ -1,9 +1,9 @@
 use std::io::Stdout;
 use std::path::Path;
-use libmacchina::traits::GeneralReadout;
-use serde::*;
 
+use libmacchina::traits::GeneralReadout;
 use machine_info::*;
+use serde::*;
 
 // Config Structs //
 
@@ -108,6 +108,7 @@ fn main() {
 
     fn get_kernel_version(info: &SystemInfo) -> String {
         // Return the kernel version
+
         // If on Linux
         #[cfg(not(target_os = "windows"))]
         return format!("Kernel: {}", info.kernel_version);
@@ -169,6 +170,7 @@ fn main() {
 
     fn get_packages() -> String {
         use libmacchina::traits::PackageReadout;
+
         // Create vector to store the package information in
         let mut packageoutputarray = Vec::new();
 
@@ -189,9 +191,9 @@ fn main() {
     fn get_theme() -> String {
         // Get current theme
         match dark_light::detect() {
-            dark_light::Mode::Dark    => { "Theme: Dark".to_string()  },
-            dark_light::Mode::Light   => { "Theme: Light".to_string() },
-            dark_light::Mode::Default => { "Theme: Unknown".to_string() },
+            dark_light::Mode::Dark    => { "Theme: Dark".to_string()    },
+            dark_light::Mode::Light   => { "Theme: Light".to_string()   },
+            dark_light::Mode::Default => { "Theme: Unknown".to_string() }
         }
     }
 
@@ -200,7 +202,7 @@ fn main() {
 
     fn get_cpu_name(info: &SystemInfo) -> String {
         // Return the CPU name
-        return format!("CPU: {} x {} @ {:.1}GHz", info.total_processors, info.processor.brand.trim_end(), sys_info::cpu_speed().unwrap() as f64/ 1000.0);
+        return format!("CPU: {} x {} @ {:.1}GHz", info.total_processors, info.processor.brand.trim_end(), sys_info::cpu_speed().unwrap() as f64 / 1000.0);
     }
 
 
@@ -234,7 +236,7 @@ fn main() {
         let swap = sys_info::mem_info().unwrap();
 
         // Return the system's swap
-        return format!("Swap: {:.2} GB / {:.2} GB ({}%)", (swap.swap_total - swap.swap_free) as f64/ 1048576.00, swap.swap_total as f64/ 1048576.00, (swap.swap_total - swap.swap_free) * 100 / swap.swap_total);
+        return format!("Swap: {:.2} GB / {:.2} GB ({}%)", (swap.swap_total - swap.swap_free) as f64 / 1048576.00, swap.swap_total as f64 / 1048576.00, (swap.swap_total - swap.swap_free) * 100 / swap.swap_total);
     }
 
 
@@ -304,12 +306,12 @@ fn main() {
         if index < image.len() {
             match queue!(stdout, style::PrintStyledContent(image[index].as_str().cyan())) {
                 Ok(_) => {},
-                Err(e) => {eprintln!("Error: {}", e);},
+                Err(e) => { eprintln!("Error: {}", e) }
             }
         } else {
             match queue!(stdout, style::Print(" ".repeat(image[0].len()))) {
                 Ok(_) => {},
-                Err(e) => {eprintln!("Error: {}", e);},
+                Err(e) => { eprintln!("Error: {}", e) }
             }
         }
     }
