@@ -18,5 +18,8 @@ target/
 # JetBrains
 .idea/
 
-# Config file
+# Config files
 config.toml
+
+# Flamegraph
+flamegraph.svg

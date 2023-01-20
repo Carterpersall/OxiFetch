@@ -5,6 +5,9 @@
       <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
       <excludeFolder url="file://$MODULE_DIR$/.vscode" />
+      <excludeFolder url="file://$MODULE_DIR$/.idea/dictionaries" />
+      <excludeFolder url="file://$MODULE_DIR$/.idea/inspectionProfiles" />
+      <excludeFolder url="file://$MODULE_DIR$/.vs" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

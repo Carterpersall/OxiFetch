@@ -3,23 +3,6 @@
 version = 3
 
 [[package]]
-name = "OxiFetch"
-version = "0.0.1"
-dependencies = [
- "confy",
- "crossterm",
- "dark-light",
- "display-info",
- "libmacchina",
- "machine-info",
- "os_info",
- "serde",
- "sys-info",
- "sys-locale",
- "whoami",
-]
-
-[[package]]
 name = "ahash"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1259,6 +1242,23 @@ checksum = "c4750134fb6a5d49afc80777394ad5d95b04bc12068c6abb92fae8f43817270f"
 dependencies = [
  "log",
  "winapi",
+]
+
+[[package]]
+name = "oxifetch"
+version = "0.0.1"
+dependencies = [
+ "confy",
+ "crossterm",
+ "dark-light",
+ "display-info",
+ "libmacchina",
+ "machine-info",
+ "os_info",
+ "serde",
+ "sys-info",
+ "sys-locale",
+ "whoami",
 ]
 
 [[package]]

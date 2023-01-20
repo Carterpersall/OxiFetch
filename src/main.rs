@@ -5,10 +5,11 @@ use serde::*;
 
 use machine_info::*;
 
-// Config Struct //
+// Config Structs //
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 struct Config {
+    image_name: String,
     user: bool,
     partition: bool,
     os: bool,
@@ -29,35 +30,27 @@ struct Config {
     info_offset: usize
 }
 
+#[derive(Default, Debug, Serialize, Deserialize)]
+struct Images {
+    windows_10: Vec<String>,
+    windows_11: Vec<String>
+}
+
 
 fn main() {
     // Configuration //
 
+    // Load config files
     let config: Config = confy::load_path(Path::new("./config.toml")).map_err(|e| eprintln!("Error: {}", e)).ok().unwrap();
     //let config: Config = confy::load("OxyFetch", None).unwrap();
+    let images: Images = confy::load_path(Path::new("./image.toml")).map_err(|e| eprintln!("Error: {}", e)).ok().unwrap();
 
-    let image = vec![
-        "                                ..,  ",
-        "                    ....,,:;+ccllll  ",
-        "      ...,,+:;  cllllllllllllllllll  ",
-        ",cclllllllllll  lllllllllllllllllll  ",
-        "llllllllllllll  lllllllllllllllllll  ",
-        "llllllllllllll  lllllllllllllllllll  ",
-        "llllllllllllll  lllllllllllllllllll  ",
-        "llllllllllllll  lllllllllllllllllll  ",
-        "llllllllllllll  lllllllllllllllllll  ",
-        "                                     ",
-        "llllllllllllll  lllllllllllllllllll  ",
-        "llllllllllllll  lllllllllllllllllll  ",
-        "llllllllllllll  lllllllllllllllllll  ",
-        "llllllllllllll  lllllllllllllllllll  ",
-        "llllllllllllll  lllllllllllllllllll  ",
-        "`'ccllllllllll  lllllllllllllllllll  ",
-        "       `' \\*::  :ccllllllllllllllll  ",
-        "                       ````''*::cll  ",
-        "                                 ``  "
-    ];
-    let cursor_position = (image[0].len() + 1) as u16;
+    // Set image based on config
+    let image = match config.image_name.as_str() {
+        "windows_10" => images.windows_10,
+        "windows_11" => images.windows_11,
+        _ => images.windows_10
+    };
 
 
     // Initialization //
@@ -70,21 +63,6 @@ fn main() {
     // Create stdout variable
     let mut stdout = stdout();
 
-    use crossterm::style::Stylize;
-
-    // Create space to print the image
-    // Doesn't work in all terminals and may not be needed anymore
-    //queue!(stdout, style::Print("\n".repeat(image.len())), cursor::MoveUp(image.len() as u16)).map_err(|e| eprintln!("Error: {}", e)).ok();
-    //stdout.flush().map_err(|e| eprintln!("Error: {}", e)).ok();
-
-    // Create variables containing image information
-    let final_position_y = match cursor::position() {
-        Ok(pos) => pos.1 + (image.len() + 1) as u16,
-        Err(e) => {
-            eprintln!("Error: {}", e);
-            (image.len() + 1) as u16
-        }
-    };
 
     // Functions //
 
@@ -93,7 +71,7 @@ fn main() {
     fn get_user() -> Vec<String> {
         // Create output string
         let mut output_string = Vec::new();
-        
+
         // Get the current user and hostname, and push it to the output string
         output_string.push(whoami::username() + "@" + whoami::hostname().as_str());
 
@@ -106,15 +84,18 @@ fn main() {
 
     // OS name //
 
-    fn get_os () -> String {
+    fn get_os() -> String {
         // Return the OS name
-        return format!("OS: {}", os_info::get().edition().unwrap());
+        return match os_info::get().edition() {
+            Some(edition) => format!("OS: {}", edition),
+            None => format!("OS: {} {}", os_info::get().os_type(), os_info::get().version())
+        };
     }
 
 
     // Computer name //
 
-    fn get_computer_name(general:&libmacchina::GeneralReadout) -> String {
+    fn get_computer_name(general: &libmacchina::GeneralReadout) -> String {
         // Return the computer name
         return match general.machine() {
             Ok(machine) => format!("Computer: {}", machine),
@@ -125,8 +106,14 @@ fn main() {
 
     // Kernel version //
 
-    fn get_kernel_version() -> String {
+    fn get_kernel_version(info: &SystemInfo) -> String {
         // Return the kernel version
+        // If on Linux
+        #[cfg(not(target_os = "windows"))]
+        return format!("Kernel: {}", info.kernel_version);
+
+        // If on Windows
+        #[cfg(target_os = "windows")]
         return format!("Kernel: {}", os_info::get().version());
     }
 
@@ -312,10 +299,10 @@ fn main() {
     // Execution //
 
     // Function to print line of image
-    fn print_image_line(index: usize, image: &Vec<&str>, mut stdout: &Stdout) {
+    fn print_image_line(index: usize, image: &Vec<String>, mut stdout: &Stdout) {
         // Check if the index is in bounds
         if index < image.len() {
-            match queue!(stdout, style::PrintStyledContent(image[index].cyan())) {
+            match queue!(stdout, style::PrintStyledContent(image[index].as_str().cyan())) {
                 Ok(_) => {},
                 Err(e) => {eprintln!("Error: {}", e);},
             }
@@ -329,15 +316,17 @@ fn main() {
 
     // Add functions to output queue
 
+    use crossterm::style::Stylize;
     use std::io::{stdout, Write};
-    use crossterm::{queue, style::{self}, cursor};
+    use crossterm::{queue, style::{self}};
 
     let mut i = 0;
 
     // If there is an offset to the information, print the lines of the image before the information
     if config.info_offset != 0 {
         for j in 0..config.info_offset {
-            queue!(stdout, style::PrintStyledContent(image[j].cyan()), style::Print("\n")).map_err(|e| eprintln!("Error: {}", e)).ok();
+            print_image_line(j, &image, &stdout);
+            queue!(stdout, style::Print("\n")).map_err(|e| eprintln!("Error: {}", e)).ok();
         }
         i = config.info_offset;
     }
@@ -366,7 +355,7 @@ fn main() {
     }
     if config.kernel_version {
         print_image_line(i, &image, &stdout);
-        queue!(stdout, style::Print(get_kernel_version() + "\n")).map_err(|e| eprintln!("Error: {}", e)).ok();
+        queue!(stdout, style::Print(get_kernel_version(&info) + "\n")).map_err(|e| eprintln!("Error: {}", e)).ok();
         i += 1;
     }
     if config.uptime {
@@ -438,12 +427,11 @@ fn main() {
     // Queue the rest of the image
     if i < image.len() {
         for j in i..image.len() {
-            queue!(stdout, style::PrintStyledContent(image[j].cyan()), style::Print("\n")).map_err(|e| eprintln!("Error: {}", e)).ok();
+            print_image_line(j, &image, &stdout);
+            queue!(stdout, style::Print("\n")).map_err(|e| eprintln!("Error: {}", e)).ok();
         }
     }
 
     // Print the output queue
     stdout.flush().map_err(|e| eprintln!("Error: {}", e)).ok();
-
-    crossterm::execute!(stdout, cursor::MoveTo(cursor_position, final_position_y)).map_err(|e| eprintln!("Error: {}", e)).ok();
 }
