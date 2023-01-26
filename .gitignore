@@ -23,3 +23,7 @@ config.toml
 
 # Flamegraph
 flamegraph.svg
+
+# Callgrind/Cachegrind
+callgrind.out*
+cachegrind.out*
