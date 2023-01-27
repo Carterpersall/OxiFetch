@@ -41,9 +41,22 @@ fn main() {
     // Configuration //
 
     // Load config files
-    let config: Config = confy::load_path(Path::new("./config.toml")).map_err(|e| eprintln!("Error: {}", e)).ok().unwrap();
-    //let config: Config = confy::load("OxyFetch", None).unwrap();
-    let images: Images = confy::load_path(Path::new("./image.toml")).map_err(|e| eprintln!("Error: {}", e)).ok().unwrap();
+    let config: Config = match confy::load_path(Path::new("./config.toml")) {//confy::load("OxyFetch", None)
+        Ok(config) => config,
+        Err(e) => {
+            eprintln!("Error loading config: {}", e);
+            Config::default()
+        }
+    };
+
+    // Load image file
+    let images: Images = match confy::load_path(Path::new("./image.toml")) {
+        Ok(images) => images,
+        Err(e) => {
+            eprintln!("Error loading images: {}", e);
+            Images::default()
+        }
+    };
 
     // Set image based on config
     let image = match config.image_name.as_str() {
@@ -68,15 +81,16 @@ fn main() {
     // User and Hostname //
 
     fn get_user() -> Vec<String> {
-        // Create output string
+        // Create the output vector
         let mut output_string = Vec::new();
 
-        // Get the current user and hostname, and push it to the output string
+        // Get the current user and hostname, and push it to the output vector
         output_string.push(whoami::username() + "@" + whoami::hostname().as_str());
 
         // Create a partition with the length of the user and hostname
         output_string.push(format!("{}", "-".repeat(output_string[0].len())));
 
+        // Return the output vector
         output_string
     }
 
@@ -84,7 +98,14 @@ fn main() {
     // OS name //
 
     fn get_os(sys: &sysinfo::System) -> String {
-        return format!("OS: {}", sys.long_os_version().unwrap());
+        // Get the OS name
+        let os = match sys.long_os_version() {
+            Some(os) => os,
+            None => "Unknown".to_string()
+        };
+
+        // Return the OS name
+        return format!("OS: {}", os);
     }
 
 
@@ -102,8 +123,14 @@ fn main() {
     // Kernel version //
 
     fn get_kernel_version() -> String {
+        // Get the kernel version
+        let kernel = match sys_info::os_release() {
+            Ok(kernel) => kernel,
+            Err(_) => "Unknown".to_string()
+        };
+
         // Return the kernel version
-        return format!("Kernel: {}", sys_info::os_release().unwrap());
+        return format!("Kernel: {}", kernel);
     }
 
 
@@ -146,10 +173,18 @@ fn main() {
         // Create Vector to store resolutions in
         let mut output = Vec::new();
 
-        for display in display_info::DisplayInfo::all().unwrap() {
+        // Get monitor information
+        let displays = match display_info::DisplayInfo::all() {
+            Some(displays) => displays,
+            None => return "Resolution: Unknown".to_string()
+        };
+
+        // Push resolutions to output vector
+        for display in displays {
             output.push(format!("{}x{}", (display.width as f32 * display.scale_factor), (display.height as f32 * display.scale_factor)));
         }
 
+        // Return the output vector
         return "Resolution: ".to_string() + output.join(", ").as_str();
     }
 
@@ -161,8 +196,10 @@ fn main() {
             fn count_dpkg() -> usize {
                 use rust_search::SearchBuilder;
 
+                // Set dpkg directory
                 let dpkg_dir = Path::new("/var/lib/dpkg/info");
 
+                // Sort files and count
                 SearchBuilder::default()
                     .location(dpkg_dir)
                     .search_input(".\\.list")
@@ -170,6 +207,7 @@ fn main() {
                     .count()
             }
 
+            // Return the package information
             return format!("Packages: {} (Dpkg)", count_dpkg());
         }
 
@@ -224,7 +262,7 @@ fn main() {
             }
 
             unsafe {
-                // First, we try to get the complete name.
+                // Attempt to get the complete name from the CPU registers
                 let res = __cpuid(0x80000000);
                 let n_ex_ids = res.eax;
                 let brand = if n_ex_ids >= 0x80000004 {
@@ -243,8 +281,10 @@ fn main() {
                         add_u32(&mut out, data.ecx);
                         add_u32(&mut out, data.edx);
                     }
+
                     let mut pos = 0;
                     for e in out.iter() {
+                        // Stop at the first null byte
                         if *e == 0 {
                             break;
                         }
@@ -264,16 +304,51 @@ fn main() {
             }
         }
 
-        // Return the CPU name
-        #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_os = "windows"))]
-        let output = format!("CPU: {} x {} @ {:.1}GHz", sys_info::cpu_num().unwrap(), get_vendor_id_and_brand().trim_end(), sys_info::cpu_speed().unwrap() as f64 / 1000.0);
+        // Initialize output string
+        let output;
 
-        #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), not(target_os = "windows")))]
-        let output = format!("CPU: {} x {} @ {:.1}GHz", _general.cpu_cores().unwrap(), get_vendor_id_and_brand().trim_end(), sys_info::cpu_speed().unwrap() as f64 / 1000.0);
+        // Get the CPU name, thread count, and speed
+        #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_os = "windows"))]{
+            let threads = match sys_info::cpu_num() {
+                Ok(count) => count,
+                Err(_) => 0
+            };
+            let speed = match sys_info::cpu_speed() {
+                Ok(speed) => speed,
+                Err(_) => 0
+            };
+            output = format!("CPU: {} x {} @ {:.1}GHz", threads, get_vendor_id_and_brand().trim_end(), speed as f64 / 1000.0);
+        }
 
-        #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
-        let output = format!("CPU: {} x {} @ {:.1}GHz", _general.cpu_cores().unwrap(), _general.cpu_model_name().unwrap(), sys_info::cpu_speed().unwrap() as f64 / 1000.0);
+        #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), not(target_os = "windows")))]{
+            let cores = match _general.cpu_cores() {
+                Ok(count) => count,
+                Err(_) => 0
+            };
+            let speed = match sys_info::cpu_speed() {
+                Ok(speed) => speed,
+                Err(_) => 0
+            };
+            output = format!("CPU: {} x {} @ {:.1}GHz", cores, get_vendor_id_and_brand().trim_end(), speed as f64 / 1000.0);
+        }
 
+        #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]{
+            let cores = match _general.cpu_cores() {
+                Ok(count) => count,
+                Err(_) => 0
+            };
+            let model = match _general.cpu_model_name() {
+                Ok(model) => model,
+                Err(_) => "Unknown".to_string()
+            };
+            let speed = match sys_info::cpu_speed() {
+                Ok(speed) => speed,
+                Err(_) => 0
+            };
+            output = format!("CPU: {} x {} @ {:.1}GHz", cores, model, speed as f64 / 1000.0);
+        }
+
+        // Return the CPU info
         return output;
     }
 
@@ -401,7 +476,7 @@ fn main() {
                         e => { eprintln!("Error {}", e); }
                     }
                 },
-                e => { eprintln!("Error {}", e); }
+                e => { eprintln!("Error {}", e); } // TODO: Create alternative for systems without the LastSeen key, which is the case for some systems
             }
 
             // Close open key
@@ -409,7 +484,7 @@ fn main() {
         }
 
         #[cfg(not(target_os = "windows"))]
-        output.push("Not Implemented".to_string());
+        output.push("Not Implemented".to_string()); // TODO: Implement
 
         // Return the output vector
         output
@@ -419,8 +494,14 @@ fn main() {
     // Processes //
 
     fn get_processes() -> String {
+        // Get the number of processes
+        let process_count = match sys_info::proc_total() {
+            Ok(process_count) => process_count.to_string(),
+            Err(_) => "Error".to_string()
+        };
+
         // Get and return processes
-        return format!("Processes: {}", sys_info::proc_total().unwrap()); //TODO: Add CPU usage
+        return format!("Processes: {}", process_count); //TODO: Add CPU usage
     }
 
 
@@ -428,16 +509,23 @@ fn main() {
 
     fn get_ram() -> String {
         // Get the system's memory information
-        let memory = sys_info::mem_info().unwrap();
+        let memory = match sys_info::mem_info() {
+            Ok(memory) => memory,
+            Err(_) => return "Error".to_string()
+        };
         // Calculate the amount of memory used
         let used = (memory.total - memory.free) as f64 / 1048576.00;
+
         // Return the system's RAM
         return format!("Memory: {:.2} GB / {:.2} GB ({}%)", used, memory.total as f64 / 1048576.00, used as u64 * 100 / (memory.total / 1048576));
     }
 
     fn get_swap() -> String {
         // Get the system's memory information
-        let swap = sys_info::mem_info().unwrap();
+        let swap = match sys_info::mem_info() {
+            Ok(swap) => swap,
+            Err(_) => return "Error".to_string()
+        };
 
         // Return the system's swap
         return format!("Swap: {:.2} GB / {:.2} GB ({}%)", (swap.swap_total - swap.swap_free) as f64 / 1048576.00, swap.swap_total as f64 / 1048576.00, (swap.swap_total - swap.swap_free) * 100 / swap.swap_total);
@@ -454,7 +542,10 @@ fn main() {
         for disk in sys.disks() {
             // Create string from disk information and push to output string
             diskoutput.push(format!("Disk ({Disk}): {Used} GB / {Total} GB ({Percent}%)\n",
-                Disk = disk.mount_point().to_str().unwrap().replace("\\", ""),
+                Disk = match disk.mount_point().to_str() {
+                    Some(disk) => disk.replace("\\", ""),
+                    None => "Error".to_string()
+                },
                 Used = (disk.total_space() - disk.available_space()) / 1073741824,
                 Total = disk.total_space() / 1073741824,
                 Percent = (disk.total_space() - disk.available_space()) * 100 / disk.total_space()
@@ -499,8 +590,14 @@ fn main() {
     // Locale //
 
     fn get_locale() -> String {
+        // Get the system's locale
+        let locale = match sys_locale::get_locale() {
+            Some(locale) => locale,
+            None => return "Unknown".to_string()
+        };
+
         // Get and Return the system's locale
-        return format!("Locale: {}", sys_locale::get_locale().unwrap());
+        return format!("Locale: {}", locale);
     }
 
 
