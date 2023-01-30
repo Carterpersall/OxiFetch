@@ -1,8 +1,7 @@
 use std::io::Stdout;
-use std::path::Path;
 
 use libmacchina::traits::GeneralReadout;
-use serde::*;
+use serde::{Serialize, Deserialize};
 use sysinfo::{DiskExt, SystemExt};
 
 // Config Structs //
@@ -40,6 +39,7 @@ struct Images {
 fn main() {
     // Configuration //
 
+    use std::path::Path;
     // Load config files
     let config: Config = match confy::load_path(Path::new("./config.toml")) {//confy::load("OxyFetch", None)
         Ok(config) => config,
@@ -362,7 +362,7 @@ fn main() {
         // Welcome to match statement hell
         #[cfg(target_os = "windows")]
         unsafe {
-            use windows_sys::Win32::System::Registry::{HKEY};
+            use windows_sys::Win32::System::Registry::HKEY;
             let mut hkey = HKEY::default();
             // Open the location where some DirectX information is stored
             match windows_sys::Win32::System::Registry::RegOpenKeyW(
@@ -579,8 +579,20 @@ fn main() {
             (Ok(percentage), Ok(ac_state), Err(_)) => {
                 format!("Battery: {}% ({})", percentage, ac_state)
             }
+            // If charging status is not available
+            (Ok(percentage), Err(_), Ok(health)) => {
+                format!("Battery: {}% ({}% Health)", percentage, health)
+            }
+            // If battery percentage is not available
+            (Err(_), Ok(ac_state), Ok(health)) => {
+                format!("Battery: Unknown% ({}) ({}% Health)", ac_state, health)
+            }
+            // If only charging status is available
+            (Err(_), Ok(ac_state), Err(_)) => {
+                format!("Battery: Unknown% ({})", ac_state)
+            }
             // If no battery information is available
-            (Err(_), _, _) | (_, Err(_), _) => {
+            (_, _, _) => {
                 "Battery: N/A".to_string()
             }
         }
@@ -603,6 +615,9 @@ fn main() {
 
     // Execution //
 
+    use std::io::{stdout, Write};
+    use crossterm::{queue, style::{self, Stylize}};
+
     // Create stdout variable
     let mut stdout = stdout();
 
@@ -622,12 +637,6 @@ fn main() {
         }
     }
 
-    // Add functions to output queue
-
-    use crossterm::style::Stylize;
-    use std::io::{stdout, Write};
-    use crossterm::{queue, style::{self}};
-
     // The current line
     let mut i = 0;
 
@@ -640,8 +649,9 @@ fn main() {
         i = config.info_offset;
     }
 
+    // The User and Partition lines use the same function
     let user = if config.user || config.partition { get_user() } else { Vec::new() };
-
+    // Add functions to output queue
     if config.user {
         print_image_line(i, &image, &stdout);
         queue!(stdout, style::Print(format!("{}\n", &user[0]))).map_err(|e| eprintln!("Error: {}", e)).ok();
