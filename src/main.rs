@@ -26,6 +26,8 @@ struct Config {
     disk_info: bool,
     battery: bool,
     locale: bool,
+    weather: bool,
+    weather_api_key: String,
     info_offset: usize
 }
 
@@ -613,6 +615,228 @@ fn main() {
     }
 
 
+    // Weather //
+
+    async fn make_http_request(url: String) -> String {
+        use http_body_util::Empty;
+        use hyper::Request;
+        use hyper::body::Bytes;
+        use tokio::net::TcpStream;
+
+        // Parse our URL...
+        let url = match url.parse::<hyper::Uri>() {
+            Ok(url) => url,
+            Err(_) => return "Error".to_string()
+        };
+
+        // Get the host and the port
+        let host = url.host().expect("uri has no host");
+        let port = url.port_u16().unwrap_or(80);
+
+        let address = format!("{}:{}", host, port);
+
+        // Open a TCP connection to the remote host
+        let stream = match TcpStream::connect(address).await {
+            Ok(stream) => stream,
+            Err(_) => return "Error".to_string()
+        };
+
+        // Perform a TCP handshake
+        let sender = hyper::client::conn::http1::handshake(stream).await.unwrap();
+        let conn: hyper::client::conn::http1::Connection<TcpStream, Empty::<Bytes>> = sender.1;
+        let mut sender = sender.0;
+
+        // Spawn a task to poll the connection, driving the HTTP state
+        tokio::task::spawn(async move {
+            if let Err(err) = conn.await {
+                eprintln!("Connection failed: {:?}", err);
+            }
+        });
+
+        // The authority of our URL will be the hostname of the httpbin remote
+        let authority = url.authority().unwrap().clone();
+
+        // Create an HTTP request with an empty body and a HOST header
+        let req = Request::builder()
+            .uri(url)
+            .header(hyper::header::HOST, authority.as_str())
+            .body(Empty::<Bytes>::new()).unwrap();
+
+        // Await the response...
+        let mut res = sender.send_request(req).await.unwrap();
+
+        use http_body_util::BodyExt;
+
+        // Return the body
+        while let Some(next) = res.frame().await {
+            let frame = next.unwrap();
+            if let Some(chunk) = frame.data_ref() {
+                return String::from_utf8(chunk.to_vec()).unwrap();
+            }
+        }
+
+        return "Error".to_string();
+    }
+
+    #[derive(Default)]
+    struct Location {
+        city: String,
+        state: String,
+        country: String,
+        lat: f64,
+        lon: f64
+    }
+
+    fn get_location_ip() -> Location {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        // Deserialize the returned JSON
+        match serde_json::from_str(rt.block_on(make_http_request("http://ip-api.com/json".to_string())).as_str()) {
+            Ok(location) => {
+                let location: serde_json::Value = location; // Needed for Rust to infer the type
+                // Return the location
+                Location {
+                    city: location["city"].to_string(),
+                    state: location["regionName"].to_string(),
+                    country: location["country"].to_string(),
+                    lat: location["lat"].as_f64().unwrap(),
+                    lon: location["lon"].as_f64().unwrap()
+                }
+            },
+            Err(_) => Location::default()
+        }
+    }
+    fn get_location_device() -> Location {
+        #[cfg(target_os = "windows")]{
+            use windows::Devices::Geolocation::{Geolocator, GeolocationAccessStatus};
+
+            // Request access to location
+            return match Geolocator::RequestAccessAsync() {
+                Ok(request) => {
+                    // Wait for access request to complete
+                    while request.Status().unwrap() != windows::Foundation::AsyncStatus::Completed {}
+                    // Get the result of the access request
+                    match request.GetResults() {
+                        Ok(access) => {
+                            match access {
+                                GeolocationAccessStatus::Allowed => {
+                                    // Create Geolocator
+                                    match Geolocator::new() {
+                                        Ok(geolocator) => {
+                                            // Get location with 1 second timeout
+                                            match geolocator.GetGeopositionAsyncWithAgeAndTimeout(
+                                                windows::Foundation::TimeSpan { Duration: i64::MAX },
+                                                windows::Foundation::TimeSpan { Duration: 10000000 }
+                                            ) {
+                                                Ok(request) => {
+                                                    // Wait for location to be retrieved
+                                                    while request.Status().unwrap() != windows::Foundation::AsyncStatus::Completed {}
+                                                    // Get the result of the location request
+                                                    match request.GetResults() {
+                                                        Ok(location) => {
+                                                            // Store coordinates in variable
+                                                            let coords = location
+                                                                .Coordinate().map_err(|_| return get_location_ip()).ok().unwrap()
+                                                                .Point().map_err(|_| return get_location_ip()).ok().unwrap()
+                                                                .Position().map_err(|_| return get_location_ip()).ok().unwrap();
+
+                                                            // Return location
+                                                            Location {
+                                                                city: String::default(),
+                                                                state: String::default(),
+                                                                country: String::default(),
+                                                                lat: coords.Latitude,
+                                                                lon: coords.Longitude
+                                                            }
+                                                        }
+                                                        Err(_) => get_location_ip()
+                                                    }
+                                                },
+                                                Err(_) => get_location_ip()
+                                            }
+                                        },
+                                        Err(_) => get_location_ip()
+                                    }
+                                },
+                                e => {
+                                    eprintln!("Error: {:?}", e);
+                                    get_location_ip()
+                                }
+                            }
+                        },
+                        Err(e) => {
+                            eprintln!("Error: {:?}", e);
+                            get_location_ip()
+                        }
+                    }
+                },
+                Err(_) => get_location_ip()
+            }
+        }
+
+        #[cfg(not(target_os = "windows"))]{
+            get_location_ip()
+        }
+    }
+
+    fn get_weather(key: String) -> String {
+        // Get the geolocation of the device with ip location as a fallback
+        let location = get_location_device();
+
+        let url = format!(
+            "https://api.openweathermap.org/data/2.5/weather?lat={}&lon={}&appid={}&units=imperial",
+            location.lat, location.lon, key
+        );
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        // Deserialize the returned JSON
+        match serde_json::from_str(rt.block_on(make_http_request(url)).as_str()) {
+            Ok(weather) => {
+                let weather: serde_json::Value = weather; // Needed for Rust to infer the type
+
+                // Get the weather description and capitalize the first letter of each word
+                let description = weather["weather"][0]["description"].to_string().trim_matches('\"').split_whitespace().collect::<Vec<_>>().iter().map(|word| {
+                    match word.chars().next() {
+                        None => String::new(),
+                        Some(f) => f.to_uppercase().collect::<String>() + word[1..].chars().collect::<String>().as_str(),
+                    }
+                }).collect::<Vec<_>>().join(" ");
+
+                // Return the weather
+                return match (location.city.is_empty(), location.state.is_empty(), location.country.is_empty()) {
+                    (false, true, true) => format!(
+                        "Weather: {}°F - {} ({})",
+                        weather["main"]["temp"],
+                        description,
+                        location.city
+                    ),
+                    (false, false, true) => format!(
+                        "Weather: {}°F - {} ({}, {})",
+                        weather["main"]["temp"],
+                        description,
+                        location.city,
+                        location.state
+                    ),
+                    (false, false, false) => format!(
+                        "Weather: {}°F - {} ({}, {}, {})",
+                        weather["main"]["temp"],
+                        description,
+                        location.city,
+                        location.state,
+                        location.country
+                    ),
+                    (_, _, _) => format!(
+                        "Weather: {}°F - {} ({})",
+                        weather["main"]["temp"],
+                        description,
+                        weather["name"].to_string().trim_matches('\"')
+                    )
+                }
+            },
+            Err(_) => "Weather: N/A".to_string()
+        }
+    }
+
+
     // Execution //
 
     use std::io::{stdout, Write};
@@ -740,6 +964,11 @@ fn main() {
     if config.locale {
         print_image_line(i, &image, &stdout);
         queue!(stdout, style::Print(get_locale() + "\n")).map_err(|e| eprintln!("Error: {}", e)).ok();
+        i += 1;
+    }
+    if config.weather && !config.weather_api_key.is_empty() {
+        print_image_line(i, &image, &stdout);
+        queue!(stdout, style::Print(get_weather(config.weather_api_key) + "\n")).map_err(|e| eprintln!("Error: {}", e)).ok();
         i += 1;
     }
 
